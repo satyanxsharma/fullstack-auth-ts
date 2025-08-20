@@ -7,6 +7,8 @@ import helmet from 'helmet';
 import database from './config/database';
 // Import our User model test
 import { testUserModel } from './models';
+// Import our routes
+import { authRoutes } from './routes';
 
 // Load environment variables
 dotenv.config();
@@ -35,7 +37,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Test User Model route
+// 🧪 Test User Model route
 app.get('/api/test-user-model', async (req, res) => {
   try {
     const testResult = await testUserModel();
@@ -61,6 +63,9 @@ app.get('/api/test-user-model', async (req, res) => {
     });
   }
 });
+
+// 🔐 Authentication routes
+app.use('/api/auth', authRoutes);
 
 // Start server function
 async function startServer() {
