@@ -3,6 +3,7 @@ import {
   register, 
   login, 
   testAuth, 
+  testEmail,
   verifyEmail, 
   forgotPassword, 
   resetPassword, 
@@ -15,6 +16,9 @@ const router = Router();
 
 // Test route (for development)
 router.get('/test', testAuth);
+
+// Test email service (for development)
+router.post('/test-email', testEmail);
 
 // User registration
 router.post('/register', validateRegistration, register);

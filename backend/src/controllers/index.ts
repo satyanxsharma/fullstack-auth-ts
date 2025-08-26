@@ -3,6 +3,7 @@ export {
   register, 
   login, 
   testAuth, 
+  testEmail,
   verifyEmail, 
   forgotPassword, 
   resetPassword, 

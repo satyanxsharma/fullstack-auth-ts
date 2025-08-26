@@ -9,6 +9,8 @@ import database from './config/database';
 import { testUserModel } from './models';
 // Import our routes
 import { authRoutes, userRoutes } from './routes';
+// Import email service
+import { verifyEmailConnection } from './services/email';
 
 // Load environment variables
 dotenv.config();
@@ -76,6 +78,10 @@ async function startServer() {
     // Connect to database first
     console.log('🚀 Connecting to database...');
     await database.connect();
+    
+    // Verify email service connection
+    console.log('📧 Verifying email service...');
+    await verifyEmailConnection();
     
     // Start the server
     app.listen(PORT, () => {

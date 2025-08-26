@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { User } from '../models';
+import { EmailService } from '../services/email';
 
 // Types for our request bodies
 interface RegisterRequest {
@@ -61,10 +62,23 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     // Save user (password will be hashed by pre-save middleware)
     await user.save();
 
+    // Generate email verification token
+    const verificationToken = user.generateEmailVerificationToken();
+    await user.save();
+
+    // Send verification email
+    const emailSent = await EmailService.sendVerificationEmail(
+      user.email,
+      user.firstName,
+      verificationToken
+    );
+
     // Return success response (without password) -Express method
     res.status(201).json({
       success: true,
-      message: 'User registered successfully',
+      message: emailSent 
+        ? 'User registered successfully. Please check your email to verify your account.'
+        : 'User registered successfully. Please check your email to verify your account.',
       data: {
         id: user._id,
         firstName: user.firstName,
@@ -167,6 +181,37 @@ export const testAuth = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+// TEST EMAIL SERVICE (for development)
+export const testEmail = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      res.status(400).json({
+        success: false,
+        message: 'Email is required for testing'
+      });
+      return;
+    }
+
+    const emailSent = await EmailService.testEmailService();
+    
+    res.status(200).json({
+      success: emailSent,
+      message: emailSent 
+        ? 'Test email sent successfully. Check your inbox!'
+        : 'Failed to send test email. Check server logs.',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Email test error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Email test failed'
+    });
+  }
+};
+
 // EMAIL VERIFICATION
 export const verifyEmail = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -200,9 +245,12 @@ export const verifyEmail = async (req: Request, res: Response): Promise<void> =>
     user.emailVerificationExpires = undefined;
     await user.save();
 
+    // Send welcome email
+    await EmailService.sendWelcomeEmail(user.email, user.firstName);
+
     res.status(200).json({
       success: true,
-      message: 'Email verified successfully'
+      message: 'Email verified successfully. Welcome to our platform!'
     });
 
   } catch (error) {
@@ -243,9 +291,12 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
     const resetToken = user.generatePasswordResetToken();
     await user.save();
 
-    // TODO: Send email with reset token
-    // For now, just return the token (in production, send via email)
-    console.log('Password reset token:', resetToken);
+    // Send password reset email
+    const emailSent = await EmailService.sendPasswordResetEmail(
+      user.email,
+      user.firstName,
+      resetToken
+    );
 
     res.status(200).json({
       success: true,
