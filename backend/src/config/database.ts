@@ -1,5 +1,20 @@
 import mongoose from 'mongoose';
 
+/* 
+// X Without private constructor - multiple instances possible
+const db1 = new Database();
+const db2 = new Database(); // Creates another instance!
+
+// With private constructor - singleton enforced
+const db1 = Database.getInstance();
+const db2 = Database.getInstance(); // Same instance!
+
+Why Singleton for Database?
+One Connection: Only one database connection per app
+Resource Management: Prevents multiple connections
+Consistency: All parts of app use same connection
+ */
+
 class Database {
   private static instance: Database;
   private connectionString: string;

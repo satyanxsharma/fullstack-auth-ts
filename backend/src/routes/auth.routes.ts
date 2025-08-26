@@ -1,21 +1,38 @@
 import { Router } from 'express';
-import { register, login, testAuth } from '../controllers';
+import { 
+  register, 
+  login, 
+  testAuth, 
+  verifyEmail, 
+  forgotPassword, 
+  resetPassword, 
+  logout, 
+  refreshToken 
+} from '../controllers';
+import { validateRegistration, validateLogin } from '../middleware';
 
 const router = Router();
 
-// 🧪 Test route (for development)
+// Test route (for development)
 router.get('/test', testAuth);
 
-// 🚀 User registration
-router.post('/register', register);
+// User registration
+router.post('/register', validateRegistration, register);
 
-// 🔐 User login
-router.post('/login', login);
+// User login
+router.post('/login', validateLogin, login);
 
-// TODO: We'll add these routes later
-// router.post('/verify-email', verifyEmail);
-// router.post('/forgot-password', forgotPassword);
-// router.post('/reset-password', resetPassword);
-// router.post('/logout', logout);
+// Email verification
+router.post('/verify-email', verifyEmail);
+
+// Password reset
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
+
+// Logout
+router.post('/logout', logout);
+
+// Refresh token
+router.post('/refresh-token', refreshToken);
 
 export default router;

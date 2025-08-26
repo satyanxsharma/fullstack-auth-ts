@@ -8,7 +8,7 @@ import database from './config/database';
 // Import our User model test
 import { testUserModel } from './models';
 // Import our routes
-import { authRoutes } from './routes';
+import { authRoutes, userRoutes } from './routes';
 
 // Load environment variables
 dotenv.config();
@@ -37,7 +37,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// 🧪 Test User Model route
+// Test User Model route
 app.get('/api/test-user-model', async (req, res) => {
   try {
     const testResult = await testUserModel();
@@ -64,8 +64,11 @@ app.get('/api/test-user-model', async (req, res) => {
   }
 });
 
-// 🔐 Authentication routes
+// Authentication routes
 app.use('/api/auth', authRoutes);
+
+// User routes (protected)
+app.use('/api/user', userRoutes);
 
 // Start server function
 async function startServer() {

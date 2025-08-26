@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { User } from '../models';
 
 // Types for our request bodies
@@ -15,34 +16,37 @@ interface LoginRequest {
   password: string;
 }
 
-// 🚀 USER REGISTRATION
-export const register = async (req: Request, res: Response) => {
+// USER REGISTRATION
+export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { firstName, lastName, email, password, confirmPassword }: RegisterRequest = req.body;
 
     // Basic validation
     if (!firstName || !lastName || !email || !password || !confirmPassword) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: 'All fields are required'
       });
+      return;
     }
 
     // Check if passwords match
     if (password !== confirmPassword) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: 'Passwords do not match'
       });
+      return;
     }
 
     // Check if user already exists
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: 'User with this email already exists'
       });
+      return;
     }
 
     // Create new user
@@ -53,10 +57,11 @@ export const register = async (req: Request, res: Response) => {
       password
     });
 
+    // Save to database (Mongoose method)
     // Save user (password will be hashed by pre-save middleware)
     await user.save();
 
-    // Return success response (without password)
+    // Return success response (without password) -Express method
     res.status(201).json({
       success: true,
       message: 'User registered successfully',
@@ -79,41 +84,49 @@ export const register = async (req: Request, res: Response) => {
   }
 };
 
-// 🔐 USER LOGIN
-export const login = async (req: Request, res: Response) => {
+// USER LOGIN
+export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password }: LoginRequest = req.body;
 
     // Basic validation
     if (!email || !password) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         message: 'Email and password are required'
       });
+      return;
     }
 
     // Find user by email (include password for comparison)
     const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
     
     if (!user) {
-      return res.status(401).json({
+      res.status(401).json({
         success: false,
         message: 'Invalid email or password'
       });
+      return;
     }
 
     // Check if password is correct
     const isPasswordValid = await user.comparePassword(password);
     
     if (!isPasswordValid) {
-      return res.status(401).json({
+      res.status(401).json({
         success: false,
         message: 'Invalid email or password'
       });
+      return;
     }
 
-    // TODO: Generate JWT token (we'll add this later)
-    // const token = generateJWT(user._id);
+    // Generate JWT token
+    const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+    const token = jwt.sign(
+      { userId: user._id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     // Return success response
     res.status(200).json({
@@ -125,7 +138,7 @@ export const login = async (req: Request, res: Response) => {
         lastName: user.lastName,
         email: user.email,
         isEmailVerified: user.isEmailVerified,
-        // token: token // We'll add this later
+        token: token
       }
     });
 
@@ -138,8 +151,8 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 
-// 🧪 TEST CONTROLLER (for development)
-export const testAuth = async (req: Request, res: Response) => {
+// TEST CONTROLLER (for development)
+export const testAuth = async (req: Request, res: Response): Promise<void> => {
   try {
     res.status(200).json({
       success: true,
@@ -150,6 +163,228 @@ export const testAuth = async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: 'Auth controller test failed'
+    });
+  }
+};
+
+// EMAIL VERIFICATION
+export const verifyEmail = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      res.status(400).json({
+        success: false,
+        message: 'Verification token is required'
+      });
+      return;
+    }
+
+    // Find user with this verification token
+    const user = await User.findOne({
+      emailVerificationToken: token,
+      emailVerificationExpires: { $gt: new Date() }
+    });
+
+    if (!user) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid or expired verification token'
+      });
+      return;
+    }
+
+    // Mark email as verified
+    user.isEmailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpires = undefined;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Email verified successfully'
+    });
+
+  } catch (error) {
+    console.error('Email verification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Email verification failed'
+    });
+  }
+};
+
+// FORGOT PASSWORD
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+      return;
+    }
+
+    // Find user by email
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+      // Don't reveal if user exists or not (security)
+      res.status(200).json({
+        success: true,
+        message: 'If an account with that email exists, a password reset link has been sent'
+      });
+      return;
+    }
+
+    // Generate password reset token
+    const resetToken = user.generatePasswordResetToken();
+    await user.save();
+
+    // TODO: Send email with reset token
+    // For now, just return the token (in production, send via email)
+    console.log('Password reset token:', resetToken);
+
+    res.status(200).json({
+      success: true,
+      message: 'If an account with that email exists, a password reset link has been sent'
+    });
+
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Password reset request failed'
+    });
+  }
+};
+
+// RESET PASSWORD
+export const resetPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { token, password, confirmPassword } = req.body;
+
+    if (!token || !password || !confirmPassword) {
+      res.status(400).json({
+        success: false,
+        message: 'Token, password, and password confirmation are required'
+      });
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      res.status(400).json({
+        success: false,
+        message: 'Passwords do not match'
+      });
+      return;
+    }
+
+    // Find user with valid reset token
+    const user = await User.findOne({
+      passwordResetToken: token,
+      passwordResetExpires: { $gt: new Date() }
+    });
+
+    if (!user) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid or expired reset token'
+      });
+      return;
+    }
+
+    // Update password and clear reset token
+    user.password = password;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset successfully'
+    });
+
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Password reset failed'
+    });
+  }
+};
+
+// LOGOUT
+export const logout = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // In a stateless JWT system, logout is handled client-side
+    // by removing the token from storage
+    // For enhanced security, you could implement a token blacklist
+    
+    res.status(200).json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Logout failed'
+    });
+  }
+};
+
+// REFRESH TOKEN
+export const refreshToken = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      res.status(400).json({
+        success: false,
+        message: 'Token is required'
+      });
+      return;
+    }
+
+    // Verify the current token
+    const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; email: string };
+
+    // Find user
+    const user = await User.findById(decoded.userId);
+    
+    if (!user) {
+      res.status(401).json({
+        success: false,
+        message: 'Invalid token'
+      });
+      return;
+    }
+
+    // Generate new token
+    const newToken = jwt.sign(
+      { userId: user._id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Token refreshed successfully',
+      data: {
+        token: newToken
+      }
+    });
+
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    res.status(401).json({
+      success: false,
+      message: 'Token refresh failed'
     });
   }
 };
